@@ -1,5 +1,10 @@
 version: "3.8"
 services:
+  dynamodb:
+    image: amazon/dynamodb-local:latest
+    ports:
+      - "8000:8000"
+    
   postgres:
     image: postgres:13
     environment:
@@ -17,10 +22,13 @@ services:
       context: .
     depends_on:
       - postgres
+      - dynamodb
     ports:
       - '4000:4000'
     environment:
       DB_HOST: postgres
+      AWS_ACCESS_KEY_ID: 'DUMMYIDEXAMPLE'
+      AWS_SECRET_ACCESS_KEY: 'DUMMYEXAMPLEKEY'
     volumes:
       - ./notes:/opt/notes-app/notes
       - ./public:/opt/notes-app/public

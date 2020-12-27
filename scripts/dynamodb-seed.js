@@ -13,21 +13,8 @@ const path = require('path');
 const {v4: uuidv4} = require('uuid');
 const {readdir, unlink, writeFile} = require('fs/promises');
 const startOfYear = require('date-fns/startOfYear');
-const credentials = require('../credentials');
-
+const {docClient, dynamodb} = require('../services/dynamodb');
 const NOTES_PATH = './notes';
-/**
- * AWS
- */
-const AWS = require('aws-sdk');
-
-AWS.config.update({
-  region: 'us-west-2',
-  endpoint: 'http://dynamodb:8000',
-});
-
-const dynamodb = new AWS.DynamoDB();
-const docClient = new AWS.DynamoDB.DocumentClient();
 
 const now = new Date();
 const startOfThisYear = startOfYear(now);
@@ -35,23 +22,36 @@ const startOfThisYear = startOfYear(now);
 function randomDateBetween(start, end) {
   return new Date(
     start.getTime() + Math.random() * (end.getTime() - start.getTime())
-  );
+  ).toString();
 }
 
 const table = {
   TableName: 'Notes',
-  KeySchema: [
-    {AttributeName: 'PK', KeyType: 'HASH'}, // Partition key
-    {AttributeName: 'SK', KeyType: 'RANGE'}, // Sort key
-  ],
+  KeySchema: [{AttributeName: 'id', KeyType: 'HASH'}],
   AttributeDefinitions: [
-    {AttributeName: 'PK', AttributeType: 'S'},
-    {AttributeName: 'SK', AttributeType: 'S'},
+    {AttributeName: 'id', AttributeType: 'S'},
+    {AttributeName: 'title', AttributeType: 'S'},
   ],
   ProvisionedThroughput: {
     ReadCapacityUnits: 5,
     WriteCapacityUnits: 5,
   },
+  GlobalSecondaryIndexes: [
+    {
+      IndexName: 'ByTitle',
+      KeySchema: [
+        {AttributeName: 'id', KeyType: 'HASH'},
+        {AttributeName: 'title', KeyType: 'RANGE'},
+      ],
+      Projection: {
+        ProjectionType: 'ALL',
+      },
+      ProvisionedThroughput: {
+        ReadCapacityUnits: 1,
+        WriteCapacityUnits: 1,
+      },
+    },
+  ],
 };
 
 const seedData = [
@@ -74,7 +74,7 @@ notes in this app! These note live on the server in the \`notes\` folder.
 ![This app is powered by React](https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/React_Native_Logo.png/800px-React_Native_Logo.png)`,
     randomDateBetween(startOfThisYear, now),
   ],
-  ['I wrote this note today', 'It was an excellent note.', now],
+  ['I wrote this note today', 'It was an excellent note.', now.toString()],
 ];
 
 async function seed() {
@@ -103,15 +103,14 @@ async function seed() {
 
   console.log('Created?', !!createres);
 
-  const data = seedData.map(([title, body, createdAt, PK = uuidv4()]) => ({
+  const data = seedData.map(([title, body, created_at]) => ({
     TableName: 'Notes',
     Item: {
-      PK,
-      SK: `note-${PK}`,
+      id: `${uuidv4()}`,
       title,
       body,
-      createdAt,
-      updatedAt: createdAt,
+      created_at,
+      updated_at: created_at,
     },
   }));
 
@@ -135,7 +134,7 @@ async function seed() {
   console.log('Creating new notes files...');
   await Promise.all(
     data.map(({Item}) => {
-      const id = Item.PK;
+      const id = Item.id;
       const content = Item.body;
       const data = new Uint8Array(Buffer.from(content));
       return writeFile(path.resolve(NOTES_PATH, `${id}.md`), data, (err) => {
