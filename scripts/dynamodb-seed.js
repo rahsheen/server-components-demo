@@ -36,22 +36,6 @@ const table = {
     ReadCapacityUnits: 5,
     WriteCapacityUnits: 5,
   },
-  GlobalSecondaryIndexes: [
-    {
-      IndexName: 'ByTitle',
-      KeySchema: [
-        {AttributeName: 'id', KeyType: 'HASH'},
-        {AttributeName: 'title', KeyType: 'RANGE'},
-      ],
-      Projection: {
-        ProjectionType: 'ALL',
-      },
-      ProvisionedThroughput: {
-        ReadCapacityUnits: 1,
-        WriteCapacityUnits: 1,
-      },
-    },
-  ],
 };
 
 const seedData = [
@@ -106,7 +90,7 @@ async function seed() {
   const data = seedData.map(([title, body, created_at]) => ({
     TableName: 'Notes',
     Item: {
-      id: `${uuidv4()}`,
+      id: uuidv4(),
       title,
       body,
       created_at,
